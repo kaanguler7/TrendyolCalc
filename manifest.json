@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Trendyol Kâr Hesaplayıcı",
+  "version": "1.2.0",
+  "description": "Trendyol ürün sayfalarında otomatik kâr hesaplama: komisyon, kargo, hizmet bedeli, stopaj ve KDV dahil.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.trendyol.com/*-p-*"
+      ],
+      "js": ["storage.js", "shipping-rates.js", "calculator.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

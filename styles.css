@@ -1,0 +1,368 @@
+/* Trendyol Kâr Hesaplayıcı — Floating Panel Styles */
+
+#ty-calc-panel {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 380px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  color: #e0e0e0;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  z-index: 999999;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+#ty-calc-panel.minimized {
+  width: auto;
+  border-radius: 8px;
+}
+
+#ty-calc-panel.minimized .ty-calc-body {
+  display: none;
+}
+
+/* ── Header ─────────────────────────────── */
+.ty-calc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #16213e;
+  cursor: move;
+  user-select: none;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.ty-calc-header-title {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  color: #ff6b00;
+}
+
+.ty-calc-toggle-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.ty-calc-toggle-btn:hover {
+  color: #fff;
+}
+
+/* ── Body ───────────────────────────────── */
+.ty-calc-body {
+  padding: 16px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.ty-calc-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ty-calc-body::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+
+/* ── Product Info ───────────────────────── */
+.ty-calc-info {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.ty-calc-info-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.ty-calc-info-label {
+  color: #888;
+  flex-shrink: 0;
+}
+
+.ty-calc-info-value {
+  color: #ccc;
+  font-weight: 500;
+  text-align: right;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Editable Sale Price ────────────────── */
+.ty-calc-price-row {
+  align-items: center;
+}
+
+.ty-calc-price-editor {
+  display: flex;
+  align-items: center;
+  width: 174px;
+  background: #0f0f23;
+  border: 1px solid #333;
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ty-calc-price-editor:focus-within {
+  border-color: #ff6b00;
+  box-shadow: 0 0 0 2px rgba(255, 107, 0, 0.12);
+}
+
+.ty-calc-price-prefix {
+  padding-left: 8px;
+  color: #777;
+  font-size: 13px;
+}
+
+.ty-calc-price-input {
+  width: 0;
+  flex: 1;
+  padding: 6px 5px;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+
+.ty-calc-price-input::-webkit-inner-spin-button,
+.ty-calc-price-input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.ty-calc-price-reset-btn {
+  align-self: stretch;
+  padding: 0 8px;
+  background: #151530;
+  border: 0;
+  border-left: 1px solid #333;
+  color: #ff8a34;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.ty-calc-price-reset-btn:hover {
+  background: #202044;
+  color: #fff;
+}
+
+/* ── Input Groups ──────────────────────── */
+.ty-calc-input-group {
+  margin-bottom: 12px;
+}
+
+.ty-calc-input-group label {
+  display: block;
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 5px;
+}
+
+.ty-calc-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: #0f0f23;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.ty-calc-input-wrapper:focus-within {
+  border-color: #ff6b00;
+}
+
+.ty-calc-currency-prefix {
+  padding: 8px 10px;
+  color: #666;
+  font-size: 14px;
+  background: #151530;
+  border-right: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.ty-calc-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  color: #fff !important;
+  font-size: 15px !important;
+  padding: 8px 10px !important;
+  font-family: inherit;
+  width: 0;
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  opacity: 1 !important;
+}
+
+.ty-calc-input::placeholder {
+  color: #555;
+}
+
+.ty-calc-input::-webkit-inner-spin-button,
+.ty-calc-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ── Select (dropdown) ─────────────────── */
+.ty-calc-select {
+  flex: 1;
+  background: #0f0f23 !important;
+  border: none !important;
+  outline: none !important;
+  color: #fff !important;
+  font-size: 14px !important;
+  padding: 8px 10px !important;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.ty-calc-select option {
+  background: #1a1a2e;
+  color: #e0e0e0;
+}
+
+/* ── Inline row with two inputs ────────── */
+.ty-calc-row-inputs {
+  display: flex;
+  gap: 10px;
+}
+
+.ty-calc-row-inputs .ty-calc-input-group {
+  flex: 1;
+}
+
+/* ── Results ────────────────────────────── */
+.ty-calc-results {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.ty-calc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 14px;
+}
+
+.ty-calc-row-label {
+  color: #999;
+}
+
+.ty-calc-row-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ty-calc-divider {
+  border: none;
+  border-top: 1px solid #2a2a4a;
+  margin: 8px 0;
+}
+
+.ty-calc-section-title {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 8px 0 4px;
+}
+
+.ty-calc-row.profit {
+  font-size: 18px;
+  padding: 6px 0;
+}
+
+.ty-calc-row.roi {
+  font-size: 14px;
+}
+
+.ty-calc-row-value.positive {
+  color: #66bb6a;
+}
+
+.ty-calc-row-value.negative {
+  color: #ef5350;
+}
+
+.ty-calc-row-value.fee {
+  color: #ffab40;
+}
+
+.ty-calc-row-value.info {
+  color: #4fc3f7;
+}
+
+.ty-calc-row-value.neutral {
+  color: #ccc;
+}
+
+/* ── Warning / Status ──────────────────── */
+.ty-calc-warning {
+  font-size: 13px;
+  color: #ff9800;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 152, 0, 0.08);
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+/* ── Free Cargo Badge ──────────────────── */
+.ty-calc-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.ty-calc-badge.free-cargo {
+  background: rgba(102, 187, 106, 0.15);
+  color: #66bb6a;
+}
+
+.ty-calc-badge.seller-cargo {
+  background: rgba(255, 171, 64, 0.15);
+  color: #ffab40;
+}
+
+/* ── Minimized ─────────────────────────── */
+#ty-calc-panel.minimized .ty-calc-header {
+  border-bottom: none;
+}
+
+#ty-calc-panel.minimized .ty-calc-header-title {
+  font-size: 13px;
+}
