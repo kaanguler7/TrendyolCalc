@@ -76,3 +76,42 @@ const DesiStorage = (() => {
 
   return { load, save };
 })();
+
+// Calculator choices (VAT, commission, cargo mode and optional deductions)
+// are remembered per product so a manual correction is not lost on refresh.
+const CalculatorSettingsStorage = (() => {
+  const STORAGE_KEY = 'ty_calc_settings';
+  const MAX_ENTRIES = 1000;
+
+  async function load(productId) {
+    if (!productId) return null;
+    try {
+      const result = await chrome.storage.local.get(STORAGE_KEY);
+      return result[STORAGE_KEY]?.[productId]?.value || null;
+    } catch (e) {
+      console.warn('[TY Calc] Settings load error:', e);
+      return null;
+    }
+  }
+
+  async function save(productId, value) {
+    if (!productId || !value) return;
+    try {
+      const result = await chrome.storage.local.get(STORAGE_KEY);
+      const data = result[STORAGE_KEY] || {};
+      data[productId] = { value, ts: Date.now() };
+
+      const keys = Object.keys(data);
+      if (keys.length > MAX_ENTRIES) {
+        const sorted = keys.sort((a, b) => data[a].ts - data[b].ts);
+        for (const key of sorted.slice(0, keys.length - MAX_ENTRIES)) delete data[key];
+      }
+
+      await chrome.storage.local.set({ [STORAGE_KEY]: data });
+    } catch (e) {
+      console.warn('[TY Calc] Settings save error:', e);
+    }
+  }
+
+  return { load, save };
+})();

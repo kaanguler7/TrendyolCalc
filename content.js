@@ -94,16 +94,16 @@
     const panel = document.createElement('div');
     panel.id = 'ty-calc-panel';
 
-    const kdvStr = product.tax != null ? `%${product.tax}` : '—';
+    const kdvStr = product.tax != null ? `%${product.tax}` : '%20 varsayılan';
     const categoryShort = product.categoryName || (product.categoryHierarchy || '').split('/').pop() || '—';
 
     // Find initial commission
     const commInfo = TYCalculator.findCommissionRate(product.categoryHierarchy, product.categoryName);
 
     // Cargo badge
-    const cargoBadge = product.price >= 300
-      ? '<span class="ty-calc-badge seller-cargo">Satıcı Öder</span>'
-      : '<span class="ty-calc-badge free-cargo">Müşteri Öder</span>';
+    const cargoBadge = product.price < TYCalculator.BAREM_THRESHOLD
+      ? '<span class="ty-calc-badge barem-cargo">Barem · Standart</span>'
+      : '<span class="ty-calc-badge seller-cargo">Desi Tarifesi</span>';
 
     // Carrier options
     const carrierOptions = Object.entries(TYCalculator.CARRIER_DISPLAY_NAMES)
@@ -111,8 +111,9 @@
       .join('');
 
     // KDV options
+    const initialVatPercent = product.tax != null ? product.tax : 20;
     const kdvOptions = [0, 1, 10, 20].map(v => {
-      const selected = (product.tax != null && v === product.tax) ? 'selected' : '';
+      const selected = v === initialVatPercent ? 'selected' : '';
       return `<option value="${v / 100}" ${selected}>%${v}</option>`;
     }).join('');
 
@@ -124,7 +125,7 @@
       <div class="ty-calc-body">
         <div class="ty-calc-info">
           <div class="ty-calc-info-row ty-calc-price-row">
-            <span class="ty-calc-info-label">Satış Fiyatı</span>
+            <span class="ty-calc-info-label">Paket Satış Toplamı</span>
             <span class="ty-calc-price-editor">
               <span class="ty-calc-price-prefix">₺</span>
               <input type="number" class="ty-calc-price-input" id="ty-calc-price-input"
@@ -139,7 +140,7 @@
             <span class="ty-calc-info-value" title="${product.categoryHierarchy || ''}">${categoryShort}</span>
           </div>
           <div class="ty-calc-info-row">
-            <span class="ty-calc-info-label">KDV</span>
+            <span class="ty-calc-info-label">Sayfadaki KDV</span>
             <span class="ty-calc-info-value">${kdvStr}</span>
           </div>
           <div class="ty-calc-info-row">
@@ -151,8 +152,8 @@
             <span class="ty-calc-info-value" id="ty-calc-cargo-badge">${cargoBadge}</span>
           </div>
           <div class="ty-calc-info-row">
-            <span class="ty-calc-info-label">Kargo Tarifesi</span>
-            <span class="ty-calc-info-value">16.07.2026 · KDV hariç</span>
+            <span class="ty-calc-info-label">Kargo Tarifeleri</span>
+            <span class="ty-calc-info-value">Barem 13.07 · Desi 16.07 · KDV hariç</span>
           </div>
         </div>
 
@@ -162,6 +163,27 @@
             <span class="ty-calc-currency-prefix">₺</span>
             <input type="number" class="ty-calc-input" id="ty-calc-cogs-input"
                    placeholder="0.00" step="0.01" min="0">
+          </div>
+        </div>
+
+        <div class="ty-calc-row-inputs">
+          <div class="ty-calc-input-group">
+            <label>Kargo Barem Modu</label>
+            <div class="ty-calc-input-wrapper">
+              <select class="ty-calc-select" id="ty-calc-barem-mode-select">
+                <option value="standard">Standart Barem</option>
+                <option value="advantage">Avantajlı Barem</option>
+                <option value="desi">Her Zaman Desi</option>
+              </select>
+            </div>
+          </div>
+          <div class="ty-calc-input-group">
+            <label>Satış KDV</label>
+            <div class="ty-calc-input-wrapper">
+              <select class="ty-calc-select" id="ty-calc-satis-kdv-select">
+                ${kdvOptions}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -199,7 +221,31 @@
               <span class="ty-calc-currency-prefix">%</span>
               <input type="number" class="ty-calc-input" id="ty-calc-komisyon-input"
                      placeholder="${commInfo.rate}" step="0.1" min="0" max="50"
-                     value="${commInfo.rate}">
+                     value="${commInfo.rate}" data-manual="false">
+            </div>
+          </div>
+        </div>
+
+        <div class="ty-calc-row-inputs">
+          <div class="ty-calc-input-group">
+            <label>Platform Bedeli (KDV Hariç)</label>
+            <div class="ty-calc-input-wrapper">
+              <span class="ty-calc-currency-prefix">₺</span>
+              <input type="number" class="ty-calc-input" id="ty-calc-service-fee-input"
+                     value="6.99" step="0.01" min="0">
+            </div>
+          </div>
+          <div class="ty-calc-input-group">
+            <label>Uygulanacak Kesintiler</label>
+            <div class="ty-calc-toggle-stack">
+              <label class="ty-calc-check-row">
+                <input type="checkbox" id="ty-calc-service-fee-enabled" checked>
+                Platform bedeli
+              </label>
+              <label class="ty-calc-check-row">
+                <input type="checkbox" id="ty-calc-stopaj-enabled" checked>
+                Stopaj (%1)
+              </label>
             </div>
           </div>
         </div>
@@ -215,7 +261,7 @@
             <span class="ty-calc-row-value fee" id="ty-calc-kargo-val">—</span>
           </div>
           <div class="ty-calc-row">
-            <span class="ty-calc-row-label">Hizmet Bedeli</span>
+            <span class="ty-calc-row-label">Platform Hizmet Bedeli</span>
             <span class="ty-calc-row-value fee" id="ty-calc-hizmet-val">—</span>
           </div>
           <div class="ty-calc-row">
@@ -238,6 +284,10 @@
             <span class="ty-calc-row-label">Ödenecek KDV</span>
             <span class="ty-calc-row-value fee" id="ty-calc-net-kdv">—</span>
           </div>
+          <div class="ty-calc-row">
+            <span class="ty-calc-row-label">Devreden KDV</span>
+            <span class="ty-calc-row-value info" id="ty-calc-devreden-kdv">—</span>
+          </div>
 
           <hr class="ty-calc-divider">
 
@@ -245,21 +295,26 @@
             <span class="ty-calc-row-label">Trendyol Ödeme</span>
             <span class="ty-calc-row-value neutral" id="ty-calc-odeme">—</span>
           </div>
+          <div class="ty-calc-row">
+            <span class="ty-calc-row-label">Nakit Kalan</span>
+            <span class="ty-calc-row-value neutral" id="ty-calc-nakit-kalan">—</span>
+          </div>
 
           <hr class="ty-calc-divider">
 
           <div class="ty-calc-row profit">
-            <span class="ty-calc-row-label">Net Kâr</span>
+            <span class="ty-calc-row-label">Ticari Kâr</span>
             <span class="ty-calc-row-value" id="ty-calc-net-kar">—</span>
           </div>
           <div class="ty-calc-row roi">
-            <span class="ty-calc-row-label">ROI</span>
+            <span class="ty-calc-row-label">Maliyet ROI</span>
             <span class="ty-calc-row-value" id="ty-calc-roi">—</span>
           </div>
           <div class="ty-calc-row roi">
-            <span class="ty-calc-row-label">Marj</span>
+            <span class="ty-calc-row-label">Net Marj</span>
             <span class="ty-calc-row-value" id="ty-calc-margin">—</span>
           </div>
+          <div class="ty-calc-footnote">Ticari kâr KDV hariçtir; stopaj vergi ön ödemesi olduğu için kârdan düşülmez.</div>
         </div>
 
         <div class="ty-calc-warning" id="ty-calc-status" style="display:none;"></div>
@@ -276,15 +331,23 @@
     const cogsInput = document.getElementById('ty-calc-cogs-input');
     const desiInput = document.getElementById('ty-calc-desi-input');
     const carrierSelect = document.getElementById('ty-calc-carrier-select');
+    const baremModeSelect = document.getElementById('ty-calc-barem-mode-select');
+    const satisKdvSelect = document.getElementById('ty-calc-satis-kdv-select');
     const alisKdvSelect = document.getElementById('ty-calc-alis-kdv-select');
     const komisyonInput = document.getElementById('ty-calc-komisyon-input');
+    const serviceFeeInput = document.getElementById('ty-calc-service-fee-input');
+    const serviceFeeEnabled = document.getElementById('ty-calc-service-fee-enabled');
+    const stopajEnabled = document.getElementById('ty-calc-stopaj-enabled');
 
     const satisFiyati = readNumberInput(priceInput);
     const cogs = readNumberInput(cogsInput) || 0;
     const desi = parseInt(desiInput?.value) || 1;
     const carrier = carrierSelect?.value || 'enucuz';
-    const alisKdvOrani = parseFloat(alisKdvSelect?.value) || 0;
+    const baremMode = baremModeSelect?.value || 'standard';
+    const satisKdvOrani = readSelectNumber(satisKdvSelect, product.tax != null ? product.tax / 100 : 0.20);
+    const alisKdvOrani = readSelectNumber(alisKdvSelect, satisKdvOrani);
     const komisyonOverride = parseFloat(komisyonInput?.value);
+    const hizmetBedeliKdvHaric = readNumberInput(serviceFeeInput);
 
     if (!Number.isFinite(satisFiyati) || satisFiyati <= 0) {
       clearCalculatedValues();
@@ -292,32 +355,30 @@
       return;
     }
 
-    if (satisFiyati >= 300 && desi > 0) {
-      const shippingRate = carrier === 'enucuz'
-        ? TYCalculator.getCheapestCarrier(desi).rate
-        : TYCalculator.getShippingRate(carrier, desi);
-
-      if (!Number.isFinite(shippingRate)) {
-        clearCalculatedValues();
-        const carrierName = carrier === 'enucuz'
-          ? 'kargo firmalarında'
-          : TYCalculator.CARRIER_DISPLAY_NAMES[carrier] || carrier;
-        showStatus(`${carrierName} için ${desi} desi yayımlanmış tarife bulunmuyor`, true);
-        return;
-      }
+    const cargoQuote = TYCalculator.getCargoQuote(satisFiyati, desi, carrier, baremMode);
+    if (!Number.isFinite(cargoQuote.rate)) {
+      clearCalculatedValues();
+      const carrierName = carrier === 'enucuz'
+        ? 'kargo firmalarında'
+        : TYCalculator.CARRIER_DISPLAY_NAMES[carrier] || carrier;
+      showStatus(`${carrierName} için ${desi} desi yayımlanmış tarife bulunmuyor`, true);
+      return;
     }
 
     const result = TYCalculator.calculate({
       satisFiyati,
       cogs,
       desi,
-      satisKdvOrani: product.tax != null ? product.tax / 100 : 0.20,
+      satisKdvOrani,
       alisKdvOrani,
       carrier,
+      baremMode,
       categoryHierarchy: product.categoryHierarchy,
       categoryName: product.categoryName,
       komisyonOverride: !isNaN(komisyonOverride) ? komisyonOverride : null,
-      freeCargo: product.freeCargo,
+      hizmetUygula: serviceFeeEnabled?.checked !== false,
+      hizmetBedeliKdvHaric: Number.isFinite(hizmetBedeliKdvHaric) ? hizmetBedeliKdvHaric : 6.99,
+      stopajUygula: stopajEnabled?.checked !== false,
     });
 
     const fmt = (v) => `₺${formatNum(v)}`;
@@ -329,16 +390,11 @@
     if (komisyonLabel) komisyonLabel.textContent = `Komisyon (%${result.komisyonOrani})`;
 
     // Kargo
-    if (result.sellerPaysCargo) {
-      const kargoLabel = document.getElementById('ty-calc-kargo-label');
-      if (kargoLabel) kargoLabel.textContent = `Kargo (${result.kargoCarrierName})`;
-      setText('ty-calc-kargo-val', fmt(result.kargoToplam));
-    } else {
-      const kargoLabel = document.getElementById('ty-calc-kargo-label');
-      if (kargoLabel) kargoLabel.textContent = 'Kargo';
-      setText('ty-calc-kargo-val', '₺0 (müşteri öder)');
-    }
-    updateCargoBadge(result.sellerPaysCargo);
+    const kargoLabel = document.getElementById('ty-calc-kargo-label');
+    const tariffLabel = result.kargoTarifeTipi === 'barem' ? 'Barem' : 'Desi';
+    if (kargoLabel) kargoLabel.textContent = `Kargo (${result.kargoCarrierName} · ${tariffLabel})`;
+    setText('ty-calc-kargo-val', fmt(result.kargoToplam));
+    updateCargoBadge(result);
 
     // Hizmet & Stopaj
     setText('ty-calc-hizmet-val', fmt(result.hizmetToplam));
@@ -347,27 +403,39 @@
     // KDV
     setText('ty-calc-satis-kdv', fmt(result.satisKdv));
     setText('ty-calc-indirilecek-kdv', fmt(result.toplamIndirilecekKdv));
-    if (result.devredenKdv > 0) {
-      setValColored('ty-calc-net-kdv', `₺0 (₺${formatNum(result.devredenKdv)} devreden)`, 'info');
-    } else {
-      setText('ty-calc-net-kdv', fmt(result.netKdv));
-    }
+    setText('ty-calc-net-kdv', fmt(result.netKdv));
+    setText('ty-calc-devreden-kdv', fmt(result.devredenKdv));
 
     // Trendyol Ödeme
     setText('ty-calc-odeme', fmt(result.trendyolOdeme));
+    setValColored('ty-calc-nakit-kalan', fmt(result.nakitKalan), cls(result.nakitKalan));
 
     // Profit
-    setValColored('ty-calc-net-kar', fmt(result.netKar), cls(result.netKar));
+    setValColored('ty-calc-net-kar', fmt(result.ticariKar), cls(result.ticariKar));
     setValColored('ty-calc-roi', `${result.roi.toFixed(1)}%`, cls(result.roi));
     setValColored('ty-calc-margin', `${result.margin.toFixed(1)}%`, cls(result.margin));
 
     // Commission and shipping warnings
     const warnings = [];
-    if (!result.komisyonMatched) {
-      warnings.push('Kategori eşleşmedi — komisyon oranını kontrol edin');
+    if (komisyonInput?.dataset.manual !== 'true') {
+      warnings.push('Komisyon otomatik tahmindir; sözleşme oranınızla kontrol edin');
+    } else if (!result.komisyonMatched) {
+      warnings.push('Kategori eşleşmedi; manuel komisyon oranı kullanılıyor');
     }
     const logisticsCarriers = ['CEVATedarik', 'CEVA', 'Horoz'];
-    if (result.sellerPaysCargo && result.desi >= 100 && !logisticsCarriers.includes(result.kargoCarrier)) {
+    if (result.kargoTarifeTipi === 'barem' && result.kargoBaremModu === 'advantage') {
+      warnings.push('Avantajlı barem yalnızca başarılı hızlı/termin gönderim koşulunda geçerlidir');
+    }
+    if (satisFiyati < TYCalculator.BAREM_THRESHOLD && result.kargoTarifeTipi === 'desi') {
+      if (result.desi > TYCalculator.BAREM_MAX_DESI) {
+        warnings.push('10 desi üstünde barem uygulanmaz; desi tarifesi kullanıldı');
+      } else if (logisticsCarriers.includes(result.kargoCarrier)) {
+        warnings.push('Lojistik taşıyıcılarda barem uygulanmaz; desi tarifesi kullanıldı');
+      } else if (baremMode === 'desi') {
+        warnings.push('Barem kapalı; desi tarifesi kullanılıyor');
+      }
+    }
+    if (result.desi >= 100 && !logisticsCarriers.includes(result.kargoCarrier)) {
       warnings.push('100 desi ve üzerindeki gönderilerde ağır kargo ek bedeli ayrıca oluşabilir');
     }
     if (warnings.length) {
@@ -388,12 +456,21 @@
     return Number.parseFloat(String(input.value || '').trim().replace(',', '.'));
   }
 
-  function updateCargoBadge(sellerPaysCargo) {
+  function readSelectNumber(select, fallback) {
+    if (!select) return fallback;
+    const value = Number.parseFloat(select.value);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function updateCargoBadge(result) {
     const container = document.getElementById('ty-calc-cargo-badge');
     if (!container) return;
-    container.innerHTML = sellerPaysCargo
-      ? '<span class="ty-calc-badge seller-cargo">Satıcı Öder</span>'
-      : '<span class="ty-calc-badge free-cargo">Müşteri Öder</span>';
+    if (result.kargoTarifeTipi === 'barem') {
+      const modeLabel = result.kargoBaremModu === 'advantage' ? 'Avantajlı' : 'Standart';
+      container.innerHTML = `<span class="ty-calc-badge barem-cargo">Barem · ${modeLabel}</span>`;
+    } else {
+      container.innerHTML = '<span class="ty-calc-badge seller-cargo">Desi Tarifesi</span>';
+    }
   }
 
   function setText(id, val) {
@@ -405,7 +482,8 @@
     const resultIds = [
       'ty-calc-komisyon-val', 'ty-calc-kargo-val', 'ty-calc-hizmet-val',
       'ty-calc-stopaj-val', 'ty-calc-satis-kdv', 'ty-calc-indirilecek-kdv',
-      'ty-calc-net-kdv', 'ty-calc-odeme', 'ty-calc-net-kar',
+      'ty-calc-net-kdv', 'ty-calc-devreden-kdv', 'ty-calc-odeme',
+      'ty-calc-nakit-kalan', 'ty-calc-net-kar',
       'ty-calc-roi', 'ty-calc-margin',
     ];
     for (const id of resultIds) setText(id, '—');
@@ -485,14 +563,23 @@
   setupToggle(panel);
   setupDrag(panel);
 
-  // Load saved COGS & Desi
+  // Load saved product inputs and calculation choices
   const productKey = String(product.id || product.barcode || product.name);
   const savedCogs = await COGSStorage.load(productKey);
   const savedDesi = await DesiStorage.load(productKey);
+  const savedSettings = await CalculatorSettingsStorage.load(productKey);
 
   const cogsInput = document.getElementById('ty-calc-cogs-input');
   const desiInput = document.getElementById('ty-calc-desi-input');
   const priceInput = document.getElementById('ty-calc-price-input');
+  const carrierSelect = document.getElementById('ty-calc-carrier-select');
+  const baremModeSelect = document.getElementById('ty-calc-barem-mode-select');
+  const satisKdvSelect = document.getElementById('ty-calc-satis-kdv-select');
+  const alisKdvSelect = document.getElementById('ty-calc-alis-kdv-select');
+  const komisyonInput = document.getElementById('ty-calc-komisyon-input');
+  const serviceFeeInput = document.getElementById('ty-calc-service-fee-input');
+  const serviceFeeEnabled = document.getElementById('ty-calc-service-fee-enabled');
+  const stopajEnabled = document.getElementById('ty-calc-stopaj-enabled');
 
   if (savedCogs != null && cogsInput) {
     cogsInput.value = savedCogs;
@@ -500,6 +587,18 @@
   if (savedDesi != null && desiInput) {
     desiInput.value = savedDesi;
   }
+  if (savedSettings) {
+    if (savedSettings.carrier && carrierSelect) carrierSelect.value = savedSettings.carrier;
+    if (savedSettings.baremMode && baremModeSelect) baremModeSelect.value = savedSettings.baremMode;
+    if (savedSettings.satisKdvOrani != null && satisKdvSelect) satisKdvSelect.value = String(savedSettings.satisKdvOrani);
+    if (savedSettings.alisKdvOrani != null && alisKdvSelect) alisKdvSelect.value = String(savedSettings.alisKdvOrani);
+    if (savedSettings.komisyonOrani != null && komisyonInput) komisyonInput.value = savedSettings.komisyonOrani;
+    if (komisyonInput) komisyonInput.dataset.manual = savedSettings.komisyonManual ? 'true' : 'false';
+    if (savedSettings.hizmetBedeliKdvHaric != null && serviceFeeInput) serviceFeeInput.value = savedSettings.hizmetBedeliKdvHaric;
+    if (savedSettings.hizmetUygula != null && serviceFeeEnabled) serviceFeeEnabled.checked = savedSettings.hizmetUygula;
+    if (savedSettings.stopajUygula != null && stopajEnabled) stopajEnabled.checked = savedSettings.stopajUygula;
+  }
+  if (serviceFeeInput && serviceFeeEnabled) serviceFeeInput.disabled = !serviceFeeEnabled.checked;
 
   // Initial calculation
   recalculate(product);
@@ -507,7 +606,11 @@
   // Input handlers with debounced save
   let saveTimeout = null;
 
-  function onInputChange() {
+  function onInputChange(event) {
+    if (event?.target?.id === 'ty-calc-komisyon-input' && event.isTrusted) {
+      event.target.dataset.manual = 'true';
+    }
+    if (serviceFeeInput && serviceFeeEnabled) serviceFeeInput.disabled = !serviceFeeEnabled.checked;
     recalculate(product);
 
     clearTimeout(saveTimeout);
@@ -516,6 +619,17 @@
       const desiVal = parseInt(desiInput?.value);
       if (!isNaN(cogsVal) && cogsVal > 0) COGSStorage.save(productKey, cogsVal);
       if (!isNaN(desiVal) && desiVal > 0) DesiStorage.save(productKey, desiVal);
+      CalculatorSettingsStorage.save(productKey, {
+        carrier: carrierSelect?.value || 'enucuz',
+        baremMode: baremModeSelect?.value || 'standard',
+        satisKdvOrani: readSelectNumber(satisKdvSelect, 0.20),
+        alisKdvOrani: readSelectNumber(alisKdvSelect, 0.20),
+        komisyonOrani: readNumberInput(komisyonInput),
+        komisyonManual: komisyonInput?.dataset.manual === 'true',
+        hizmetBedeliKdvHaric: readNumberInput(serviceFeeInput),
+        hizmetUygula: serviceFeeEnabled?.checked !== false,
+        stopajUygula: stopajEnabled?.checked !== false,
+      });
     }, 500);
   }
 
@@ -525,8 +639,13 @@
     'ty-calc-cogs-input',
     'ty-calc-desi-input',
     'ty-calc-carrier-select',
+    'ty-calc-barem-mode-select',
+    'ty-calc-satis-kdv-select',
     'ty-calc-alis-kdv-select',
     'ty-calc-komisyon-input',
+    'ty-calc-service-fee-input',
+    'ty-calc-service-fee-enabled',
+    'ty-calc-stopaj-enabled',
   ];
 
   for (const inputId of inputs) {

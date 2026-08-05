@@ -259,6 +259,37 @@
   flex: 1;
 }
 
+.ty-calc-toggle-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 35px;
+  padding: 4px 9px;
+  gap: 4px;
+  background: #0f0f23;
+  border: 1px solid #333;
+  border-radius: 8px;
+}
+
+.ty-calc-input-group .ty-calc-check-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #bbb;
+  cursor: pointer;
+  line-height: 1.25;
+}
+
+.ty-calc-check-row input {
+  accent-color: #ff6b00;
+}
+
+.ty-calc-input:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed;
+}
+
 /* ── Results ────────────────────────────── */
 .ty-calc-results {
   display: flex;
@@ -305,6 +336,13 @@
 
 .ty-calc-row.roi {
   font-size: 14px;
+}
+
+.ty-calc-footnote {
+  margin-top: 5px;
+  color: #777;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .ty-calc-row-value.positive {
@@ -356,6 +394,11 @@
 .ty-calc-badge.seller-cargo {
   background: rgba(255, 171, 64, 0.15);
   color: #ffab40;
+}
+
+.ty-calc-badge.barem-cargo {
+  background: rgba(79, 195, 247, 0.15);
+  color: #4fc3f7;
 }
 
 /* ── Minimized ─────────────────────────── */
