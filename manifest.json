@@ -1,15 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Trendyol Kâr Hesaplayıcı",
-  "version": "1.3.0",
-  "description": "Trendyol ürün sayfalarında barem/desi kargo, KDV, komisyon, stopaj, nakit ve ticari kâr hesaplama.",
+  "name": "Pazaryeri Kâr Hesaplayıcı",
+  "version": "2.3.7",
+  "description": "Trendyol ve Hepsiburada ürün sayfalarında platforma özel kargo, KDV, komisyon, stopaj ve kâr hesaplama.",
   "permissions": ["storage"],
   "content_scripts": [
     {
       "matches": [
-        "https://www.trendyol.com/*-p-*"
+        "https://www.trendyol.com/*-p-*",
+        "https://www.hepsiburada.com/*-p-*",
+        "https://www.hepsiburada.com/*-pm-*"
       ],
-      "js": ["storage.js", "shipping-rates.js", "calculator.js", "content.js"],
+      "js": ["seller-history.js", "storage.js", "shipping-rates.js", "hepsiburada-rates.js", "calculator.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }

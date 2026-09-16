@@ -1,4 +1,4 @@
-// Trendyol Kâr Hesaplayıcı — Fee Calculation Engine
+// Pazaryeri Kâr Hesaplayıcı — Fee Calculation Engine
 // Commission rates from official Trendyol PDF (March 2026)
 // Shipping rates from official Trendyol PDF (16 July 2026, KDV hariç)
 
@@ -222,7 +222,10 @@ const TYCalculator = (() => {
   const CARRIER_DISPLAY_NAMES = TYShippingRates.CARRIER_DISPLAY_NAMES;
 
   // ─── Hizmet Bedeli ──────────────────────────────────────────
-  const VARSAYILAN_HIZMET_BEDELI_KDV_HARIC = 6.99;
+  // Standart Trendyol paketlerinde Platform Hizmet Bedeli. "Bugün Kargoda"
+  // indirimi yalnız etiket ve aynı gün taşıma statüsü birlikte sağlanırsa
+  // geçerlidir; bu nedenle bilinmeyen bir siparişte güvenli varsayım standarttır.
+  const VARSAYILAN_HIZMET_BEDELI_KDV_HARIC = 10.99;
   const HIZMET_KDV_ORANI = 0.20;
 
   // ─── Stopaj ─────────────────────────────────────────────────
@@ -230,7 +233,10 @@ const TYCalculator = (() => {
 
   // ─── Commission Lookup ──────────────────────────────────────
 
-  function findCommissionRate(categoryHierarchy, categoryName) {
+  function findCommissionRate(categoryHierarchy, categoryName, platform = 'trendyol', brand = '', productName = '') {
+    if (platform === 'hepsiburada' && typeof HBRates !== 'undefined') {
+      return HBRates.findCommissionRate(categoryHierarchy, categoryName, brand, productName);
+    }
     if (!categoryHierarchy && !categoryName) return { rate: 20.00, matched: false, label: 'Varsayılan' };
 
     const searchText = normalizeSearchText(`${categoryHierarchy || ''} ${categoryName || ''}`);
@@ -286,22 +292,47 @@ const TYCalculator = (() => {
 
   // ─── Shipping Lookup ────────────────────────────────────────
 
-  function getShippingRate(carrier, desi) {
+  function getShippingConfig(platform = 'trendyol') {
+    return platform === 'hepsiburada' && typeof HBRates !== 'undefined'
+      ? HBRates
+      : TYShippingRates;
+  }
+
+  function getCarrierDisplayNames(platform = 'trendyol') {
+    return getShippingConfig(platform).CARRIER_DISPLAY_NAMES;
+  }
+
+  function getPlatformMeta(platform = 'trendyol') {
+    const config = getShippingConfig(platform);
+    return {
+      platform,
+      shippingEffectiveDate: config.EFFECTIVE_DATE,
+      maxDesi: config.MAX_DESI,
+      carrierDisplayNames: config.CARRIER_DISPLAY_NAMES,
+      hasBarem: Boolean(config.BAREM_RATES),
+      baremThreshold: config.BAREM_THRESHOLD,
+      commissionVatIncluded: config.COMMISSION_VAT_INCLUDED !== false,
+    };
+  }
+
+  function getShippingRate(carrier, desi, platform = 'trendyol') {
     desi = Math.max(0, Math.ceil(Number(desi) || 0));
+    const config = getShippingConfig(platform);
+    if (platform === 'hepsiburada') return config.getShippingRate(carrier, desi);
     const rates = SHIPPING_RATES[carrier];
-    if (!rates) return null;
-    if (desi > TYShippingRates.MAX_DESI) return null;
+    if (!rates || desi > config.MAX_DESI) return null;
 
     const rate = rates[desi];
     return Number.isFinite(rate) ? rate : null;
   }
 
-  function getCheapestCarrier(desi) {
+  function getCheapestCarrier(desi, platform = 'trendyol') {
     let cheapest = null;
     let cheapestRate = Infinity;
+    const config = getShippingConfig(platform);
 
-    for (const carrier of TYShippingRates.PARCEL_CARRIERS) {
-      const rate = getShippingRate(carrier, desi);
+    for (const carrier of config.PARCEL_CARRIERS) {
+      const rate = getShippingRate(carrier, desi, platform);
       if (rate !== null && rate < cheapestRate) {
         cheapestRate = rate;
         cheapest = carrier;
@@ -311,7 +342,10 @@ const TYCalculator = (() => {
     return { carrier: cheapest, rate: Number.isFinite(cheapestRate) ? cheapestRate : null };
   }
 
-  function getBaremRate(carrier, satisFiyati, baremMode = 'standard') {
+  function getBaremRate(carrier, satisFiyati, baremMode = 'standard', platform = 'trendyol') {
+    if (platform === 'hepsiburada') {
+      return getShippingConfig(platform).getBaremRate(carrier, satisFiyati);
+    }
     const mode = baremMode === 'advantage' ? 'advantage' : 'standard';
     const price = Number(satisFiyati);
     if (!TYShippingRates.PARCEL_CARRIERS.includes(carrier)) return null;
@@ -322,57 +356,112 @@ const TYCalculator = (() => {
     return Number.isFinite(rate) ? rate : null;
   }
 
-  function getCargoQuote(satisFiyati, desi, carrier = 'enucuz', baremMode = 'standard') {
+  function getCargoQuote(
+    satisFiyati,
+    desi,
+    carrier = 'enucuz',
+    baremMode = 'standard',
+    platform = 'trendyol',
+    shippingContext = {},
+  ) {
     const normalizedDesi = Math.max(0, Math.ceil(Number(desi) || 0));
-    const price = Number(satisFiyati);
-    const mode = ['advantage', 'standard', 'desi'].includes(baremMode) ? baremMode : 'standard';
+    const packagePrice = Number(satisFiyati);
+    const config = getShippingConfig(platform);
+    const isHepsiburada = platform === 'hepsiburada';
+    const requestedOrderTotal = Number(shippingContext?.orderTotalGross);
+    const orderTotalGross = !isHepsiburada && Number.isFinite(requestedOrderTotal) && requestedOrderTotal > 0
+      ? requestedOrderTotal
+      : packagePrice;
+    const requestedPackageRole = shippingContext?.packageRole;
+    const packageRole = !isHepsiburada && ['single', 'splitLowest', 'splitOther'].includes(requestedPackageRole)
+      ? requestedPackageRole
+      : 'single';
+    // Trendyol Academy: a split order below 350 TL grants barem to only the
+    // lowest-desi package. At 350 TL and above every split package uses desi.
+    const packageCanUseBarem = packageRole !== 'splitOther';
+    const mode = isHepsiburada
+      ? (baremMode === 'desi' ? 'desi' : 'support')
+      : (['advantage', 'standard', 'desi'].includes(baremMode) ? baremMode : 'standard');
     const candidates = carrier === 'enucuz' || !carrier
-      ? TYShippingRates.PARCEL_CARRIERS
+      ? config.PARCEL_CARRIERS
       : [carrier];
 
     let best = null;
     for (const candidate of candidates) {
+      const baremCarriers = config.BAREM_CARRIERS || config.PARCEL_CARRIERS;
       const useBarem = mode !== 'desi'
-        && price < TYShippingRates.BAREM_THRESHOLD
-        && normalizedDesi <= TYShippingRates.BAREM_MAX_DESI
-        && TYShippingRates.PARCEL_CARRIERS.includes(candidate);
+        && orderTotalGross < config.BAREM_THRESHOLD
+        && packageCanUseBarem
+        && normalizedDesi <= config.BAREM_MAX_DESI
+        && baremCarriers.includes(candidate);
       const rate = useBarem
-        ? getBaremRate(candidate, price, mode)
-        : getShippingRate(candidate, normalizedDesi);
+        ? getBaremRate(candidate, orderTotalGross, mode, platform)
+        : getShippingRate(candidate, normalizedDesi, platform);
 
       if (rate === null || !Number.isFinite(rate)) continue;
       const quote = {
         carrier: candidate,
-        carrierName: CARRIER_DISPLAY_NAMES[candidate] || candidate,
+        carrierName: config.CARRIER_DISPLAY_NAMES[candidate] || candidate,
         rate,
         type: useBarem ? 'barem' : 'desi',
         mode: useBarem ? mode : 'desi',
-        band: useBarem ? (price < 200 ? '0-199,99 TL' : '200-349,99 TL') : null,
+        band: useBarem
+          ? (orderTotalGross < 200 ? '0-199,99 TL' : (isHepsiburada ? '200-399,99 TL' : '200-349,99 TL'))
+          : null,
         desi: normalizedDesi,
+        orderTotalGross: r2(orderTotalGross),
+        packageRole,
       };
       if (!best || quote.rate < best.rate) best = quote;
     }
 
     return best || {
       carrier: carrier === 'enucuz' ? null : carrier,
-      carrierName: carrier === 'enucuz' ? '' : (CARRIER_DISPLAY_NAMES[carrier] || carrier),
+      carrierName: carrier === 'enucuz' ? '' : (config.CARRIER_DISPLAY_NAMES[carrier] || carrier),
       rate: null,
       type: 'desi',
       mode: 'desi',
       band: null,
       desi: normalizedDesi,
+      orderTotalGross: r2(orderTotalGross),
+      packageRole,
     };
   }
 
-  function getAllCarrierRates(desi) {
+  function getAllCarrierRates(desi, platform = 'trendyol') {
     const results = [];
-    for (const carrier of Object.keys(SHIPPING_RATES)) {
-      const rate = getShippingRate(carrier, desi);
+    const config = getShippingConfig(platform);
+    for (const carrier of Object.keys(config.CARRIER_DISPLAY_NAMES)) {
+      const rate = getShippingRate(carrier, desi, platform);
       if (rate !== null) {
-        results.push({ carrier, rate, name: CARRIER_DISPLAY_NAMES[carrier] });
+        results.push({ carrier, rate, name: config.CARRIER_DISPLAY_NAMES[carrier] });
       }
     }
     return results.sort((a, b) => a.rate - b.rate);
+  }
+
+  function getPackageSaleTotal(unitPrice, quantity = 1) {
+    const normalizedUnitPrice = Math.max(0, Number(unitPrice) || 0);
+    const normalizedQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
+    return r2(normalizedUnitPrice * normalizedQuantity);
+  }
+
+  function resolveMinimumOrderQuantity(product, winnerVariant, visibleText = '') {
+    const textMatch = String(visibleText).match(/en\s+az\s+(\d+)\s+adet/i);
+    const visibleMoq = Number.parseInt(textMatch?.[1], 10);
+    if (Number.isInteger(visibleMoq) && visibleMoq > 0) return visibleMoq;
+
+    const candidates = [
+      product?.moq,
+      product?.minimumOrderQuantity,
+      winnerVariant?.moq,
+      winnerVariant?.minimumOrderQuantity,
+    ];
+    for (const candidate of candidates) {
+      const quantity = Number.parseInt(candidate, 10);
+      if (Number.isInteger(quantity) && quantity > 0) return quantity;
+    }
+    return 1;
   }
 
   // ─── Main Calculation ───────────────────────────────────────
@@ -386,12 +475,17 @@ const TYCalculator = (() => {
       alisKdvOrani,
       carrier,
       baremMode,
+      orderTotalGross,
+      packageRole,
       categoryHierarchy, // Trendyol category hierarchy string
       categoryName,      // Trendyol category name
       komisyonOverride,
       hizmetUygula,
       hizmetBedeliKdvHaric,
       stopajUygula,
+      platform = 'trendyol',
+      brand,
+      productName,
     } = params;
 
     const saleGross = Math.max(0, Number(satisFiyati) || 0);
@@ -405,7 +499,7 @@ const TYCalculator = (() => {
     const satisKdv = saleGross - satisKdvHaric;
 
     // 2. Komisyon
-    const commissionInfo = findCommissionRate(categoryHierarchy, categoryName);
+    const commissionInfo = findCommissionRate(categoryHierarchy, categoryName, platform, brand, productName);
     const overrideRate = komisyonOverride == null || komisyonOverride === ''
       ? NaN
       : Number(komisyonOverride);
@@ -413,29 +507,44 @@ const TYCalculator = (() => {
       ? overrideRate
       : commissionInfo.rate;
     const komisyonOrani = commissionPercent / 100;
-    const komisyon = saleGross * komisyonOrani;
-    const komisyonKdvHaric = komisyon / (1 + HIZMET_KDV_ORANI);
-    const komisyonKdv = komisyon - komisyonKdvHaric;
+    const commissionVatIncluded = getShippingConfig(platform).COMMISSION_VAT_INCLUDED !== false;
+    const komisyonKdvHaric = commissionVatIncluded
+      ? (saleGross * komisyonOrani) / (1 + HIZMET_KDV_ORANI)
+      : saleGross * komisyonOrani;
+    const komisyonKdv = komisyonKdvHaric * HIZMET_KDV_ORANI;
+    const komisyon = komisyonKdvHaric + komisyonKdv;
+    const komisyonEfektifOran = saleGross > 0 ? (komisyon / saleGross) * 100 : 0;
 
     // 3. Kargo
     // Müşteriye "ücretsiz kargo" gösterilmesi satıcının kargo faturasını sıfırlamaz.
-    // 350 TL altı uygun paketlerde sabit barem; diğerlerinde desi tarifesi uygulanır.
-    const cargoQuote = getCargoQuote(saleGross, desi, carrier, baremMode);
+    // Platformun uygun tutar aralığında sabit barem; diğer siparişlerde desi tarifesi uygulanır.
+    const shippingConfig = getShippingConfig(platform);
+    const cargoQuote = getCargoQuote(
+      saleGross,
+      desi,
+      carrier,
+      baremMode,
+      platform,
+      { orderTotalGross, packageRole },
+    );
     const kargoKdvHaric = Number.isFinite(cargoQuote.rate) ? cargoQuote.rate : 0;
     const kargoCarrier = cargoQuote.carrier;
     const kargoCarrierName = cargoQuote.carrierName;
     const sellerPaysCargo = kargoKdvHaric > 0;
 
-    const kargoKdv = kargoKdvHaric * TYShippingRates.VAT_RATE;
+    const kargoKdv = kargoKdvHaric * shippingConfig.VAT_RATE;
     const kargoToplam = kargoKdvHaric + kargoKdv;
 
     // 4. Hizmet Bedeli
-    const platformFeeEnabled = hizmetUygula !== false;
+    const defaultServiceFee = platform === 'hepsiburada' ? 12 : VARSAYILAN_HIZMET_BEDELI_KDV_HARIC;
+    const platformFeeEnabled = platform === 'hepsiburada'
+      ? hizmetUygula === true
+      : hizmetUygula !== false;
     const requestedServiceFee = Number(hizmetBedeliKdvHaric);
     const hizmetKdvHaric = platformFeeEnabled
       ? Math.max(0, Number.isFinite(requestedServiceFee)
         ? requestedServiceFee
-        : VARSAYILAN_HIZMET_BEDELI_KDV_HARIC)
+        : defaultServiceFee)
       : 0;
     const hizmetKdv = hizmetKdvHaric * HIZMET_KDV_ORANI;
     const hizmetToplam = hizmetKdvHaric + hizmetKdv;
@@ -446,8 +555,8 @@ const TYCalculator = (() => {
     const withholdingEnabled = stopajUygula !== false;
     const stopaj = withholdingEnabled ? satisKdvHaric * STOPAJ_ORANI : 0;
 
-    // 6. Trendyol'dan satıcıya ödeme
-    const trendyolOdeme = saleGross - komisyon - kargoToplam - hizmetToplam - stopaj;
+    // 6. Pazaryerinden satıcıya ödeme
+    const platformOdeme = saleGross - komisyon - kargoToplam - hizmetToplam - stopaj;
 
     // 7. Alış KDV
     const alisKdv = cogsNet * purchaseVatRate;
@@ -468,7 +577,7 @@ const TYCalculator = (() => {
       - kargoKdvHaric
       - hizmetKdvHaric;
     const cogsToplam = cogsNet + alisKdv;
-    const nakitKalan = trendyolOdeme - cogsToplam - netKdv;
+    const nakitKalan = platformOdeme - cogsToplam - netKdv;
 
     // ROI
     const roi = cogsNet > 0 ? (ticariKar / cogsNet) * 100 : 0;
@@ -479,6 +588,7 @@ const TYCalculator = (() => {
     return {
       // Inputs
       satisFiyati: r2(saleGross),
+      platform,
       satisKdvHaric: r2(satisKdvHaric),
       cogs: r2(cogsNet),
       cogsToplam: r2(cogsToplam),
@@ -499,6 +609,8 @@ const TYCalculator = (() => {
 
       // Komisyon
       komisyonOrani: r2(komisyonOrani * 100),
+      komisyonEfektifOran: r2(komisyonEfektifOran),
+      komisyonKdvDahilOran: commissionVatIncluded,
       komisyonLabel: commissionInfo.label,
       komisyonMatched: commissionInfo.matched,
       komisyon: r2(komisyon),
@@ -513,6 +625,8 @@ const TYCalculator = (() => {
       kargoTarifeTipi: cargoQuote.type,
       kargoBaremModu: cargoQuote.mode,
       kargoBaremBandı: cargoQuote.band,
+      orderTotalGross: cargoQuote.orderTotalGross,
+      packageRole: cargoQuote.packageRole,
 
       // Hizmet & Stopaj
       hizmetUygula: platformFeeEnabled,
@@ -522,12 +636,41 @@ const TYCalculator = (() => {
       stopaj: r2(stopaj),
 
       // Payment & Profit
-      trendyolOdeme: r2(trendyolOdeme),
+      platformOdeme: r2(platformOdeme),
+      trendyolOdeme: r2(platformOdeme), // Geriye dönük uyumluluk
       nakitKalan: r2(nakitKalan),
       ticariKar: r2(ticariKar),
       netKar: r2(ticariKar), // Backwards-compatible alias
       roi: r1(roi),
       margin: r1(margin),
+    };
+  }
+
+  // The price written on an invoice is commonly communicated as a VAT-included
+  // "arrival price", while the profit engine works with VAT-excluded COGS.
+  // Keep that conversion in one testable place so the UI cannot silently treat
+  // a gross purchase price as a net expense.
+  function getCostBreakdown(unitCost, vatRate, vatIncluded = true, quantity = 1) {
+    const enteredUnit = Math.max(0, Number(unitCost) || 0);
+    const purchaseVatRate = normalizeVatRate(vatRate, 0.20);
+    const itemCount = Math.max(1, Number.parseInt(quantity, 10) || 1);
+    const unitNet = vatIncluded
+      ? enteredUnit / (1 + purchaseVatRate)
+      : enteredUnit;
+    const unitVat = unitNet * purchaseVatRate;
+    const unitGross = unitNet + unitVat;
+
+    return {
+      quantity: itemCount,
+      vatIncluded: Boolean(vatIncluded),
+      vatRate: purchaseVatRate,
+      enteredUnit: r2(enteredUnit),
+      unitNet: r2(unitNet),
+      unitVat: r2(unitVat),
+      unitGross: r2(unitGross),
+      netTotal: r2(unitNet * itemCount),
+      vatTotal: r2(unitVat * itemCount),
+      grossTotal: r2(unitGross * itemCount),
     };
   }
 
@@ -552,6 +695,11 @@ const TYCalculator = (() => {
     getBaremRate,
     getCargoQuote,
     getAllCarrierRates,
+    getCarrierDisplayNames,
+    getPlatformMeta,
+    getCostBreakdown,
+    getPackageSaleTotal,
+    resolveMinimumOrderQuantity,
     CARRIER_DISPLAY_NAMES,
     SHIPPING_RATES,
     SHIPPING_EFFECTIVE_DATE: TYShippingRates.EFFECTIVE_DATE,
